@@ -945,6 +945,12 @@ class ImpossibleCheckTypeFunctionCallRuleTest extends RuleTestCase
 		]);
 	}
 
+	public function testBug11014(): void
+	{
+		$this->treatPhpDocTypesAsCertain = false;
+		$this->analyse([__DIR__ . '/data/bug-11014.php'], []);
+	}
+
 	public function testAlwaysTruePregMatch(): void
 	{
 		$this->treatPhpDocTypesAsCertain = true;
