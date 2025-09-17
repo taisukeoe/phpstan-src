@@ -3678,9 +3678,10 @@ final class MutatingScope implements Scope
 		?array $callableParameters,
 	): self
 	{
-		$expressionTypes = [];
-		$nativeTypes = [];
-		foreach ($closure->params as $i => $parameter) {
+                $expressionTypes = [];
+                $nativeTypes = [];
+                $arrayMapArgs = $closure->getAttribute(ArrayMapArgVisitor::ATTRIBUTE_NAME);
+                foreach ($closure->params as $i => $parameter) {
 			if (!$parameter->var instanceof Variable || !is_string($parameter->var->name)) {
 				throw new ShouldNotHappenException();
 			}
@@ -3701,10 +3702,19 @@ final class MutatingScope implements Scope
 					$parameterType = self::intersectButNotNever($parameterType, new MixedType());
 				}
 			}
-			$holder = ExpressionTypeHolder::createYes($parameter->var, $parameterType);
-			$expressionTypes[$paramExprString] = $holder;
-			$nativeTypes[$paramExprString] = $holder;
-		}
+                        $nativeParameterType = $parameterType;
+                        if (is_array($arrayMapArgs) && array_key_exists($i, $arrayMapArgs)) {
+                                $nativeParameterType = $this->getNativeType($arrayMapArgs[$i]->value)->getIterableValueType();
+                        }
+
+                        $holder = ExpressionTypeHolder::createYes($parameter->var, $parameterType);
+                        $expressionTypes[$paramExprString] = $holder;
+                        if ($nativeParameterType->equals($parameterType)) {
+                                $nativeTypes[$paramExprString] = $holder;
+                        } else {
+                                $nativeTypes[$paramExprString] = ExpressionTypeHolder::createYes($parameter->var, $nativeParameterType);
+                        }
+                }
 
 		$nonRefVariableNames = [];
 		foreach ($closure->uses as $use) {
@@ -3871,8 +3881,9 @@ final class MutatingScope implements Scope
 	 */
 	private function enterArrowFunctionWithoutReflection(Expr\ArrowFunction $arrowFunction, ?array $callableParameters): self
 	{
-		$arrowFunctionScope = $this;
-		foreach ($arrowFunction->params as $i => $parameter) {
+                $arrowFunctionScope = $this;
+                $arrayMapArgs = $arrowFunction->getAttribute(ArrayMapArgVisitor::ATTRIBUTE_NAME);
+                foreach ($arrowFunction->params as $i => $parameter) {
 			if ($parameter->type === null) {
 				$parameterType = new MixedType();
 			} else {
@@ -3898,8 +3909,13 @@ final class MutatingScope implements Scope
 			if (!$parameter->var instanceof Variable || !is_string($parameter->var->name)) {
 				throw new ShouldNotHappenException();
 			}
-			$arrowFunctionScope = $arrowFunctionScope->assignVariable($parameter->var->name, $parameterType, $parameterType, TrinaryLogic::createYes());
-		}
+                        $nativeParameterType = $parameterType;
+                        if (is_array($arrayMapArgs) && array_key_exists($i, $arrayMapArgs)) {
+                                $nativeParameterType = $this->getNativeType($arrayMapArgs[$i]->value)->getIterableValueType();
+                        }
+
+                        $arrowFunctionScope = $arrowFunctionScope->assignVariable($parameter->var->name, $parameterType, $nativeParameterType, TrinaryLogic::createYes());
+                }
 
 		if ($arrowFunction->static) {
 			$arrowFunctionScope = $arrowFunctionScope->invalidateExpression(new Variable('this'));
